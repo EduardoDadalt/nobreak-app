@@ -83,3 +83,7 @@ I  → #TS SHARA 221011 Senoid  18 V01020100F
 F  → #Univ. 100 24.00 60.0          (tensão nominal "Univ." = bivolt)
 Q1 → (221.0 221.0 112.0 022 60.0 27.2 29.0 00001001
 ```
+
+## Licença
+
+[MIT](LICENSE)
