@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # Tag v1.2.3 → 1.2.3. Fora de tags, 0.0.<execução>, para não passar na frente de uma release.
+      - name: Versão
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { "0.0.$env:GITHUB_RUN_NUMBER" }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Testes
+        run: dotnet test NobreakMonitor.slnx -c Release
+
+      - name: Instalador
+        run: dotnet build installer/NobreakMonitor.Installer.wixproj -c Release -p:ProductVersion=${{ steps.version.outputs.value }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: NobreakMonitor-${{ steps.version.outputs.value }}
+          path: installer/bin/Release/*.msi
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: NobreakMonitor-${{ needs.build.outputs.version }}
+
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" *.msi --repo "${{ github.repository }}" --title "Nobreak Monitor ${{ needs.build.outputs.version }}" --generate-notes

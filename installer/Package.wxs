@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="Nobreak Monitor"
+           Manufacturer="Eduardo Dadalt"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="B1E50D23-6BE2-40FC-BF47-86343E259095"
+           Language="1046"
+           Codepage="1252"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="Uma versão mais nova do Nobreak Monitor já está instalada." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="app.ico" SourceFile="..\src\NobreakMonitor.App\Assets\app.ico" />
+    <Property Id="ARPPRODUCTICON" Value="app.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/EduardoDadalt/nobreak-app" />
+
+    <!-- AUTOSTART=0 na linha de comando instala sem abrir o painel ao entrar no Windows. -->
+    <Property Id="AUTOSTART" Value="1" Secure="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="NobreakMonitor" />
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATAFOLDER" Name="NobreakMonitor" />
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="ProgramFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DefaultConfig" />
+      <ComponentRef Id="AutoStart" />
+    </Feature>
+
+    <ComponentGroup Id="ProgramFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\**">
+        <Exclude Files="$(var.PublishDir)\NobreakMonitor.Service.exe" />
+        <Exclude Files="$(var.PublishDir)\NobreakMonitor.App.exe" />
+        <Exclude Files="$(var.PublishDir)\appsettings.Development.json" />
+      </Files>
+
+      <!-- Serviço: início automático como LocalSystem; reinicia 5 s depois de cada falha. -->
+      <Component Id="ServiceExe">
+        <File Id="ServiceExe" Source="$(var.PublishDir)\NobreakMonitor.Service.exe" KeyPath="yes" />
+        <ServiceInstall Name="NobreakMonitor"
+                        DisplayName="Nobreak Monitor"
+                        Description="Monitora o nobreak (protocolo Megatec/TS Shara) e desliga o computador em falta de energia."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Vital="yes">
+          <ServiceConfig FailureActionsWhen="failedToStopOrReturnedError" OnInstall="yes" OnReinstall="yes" />
+          <!-- A tabela nativa MsiServiceConfigFailureActions falha (erro 5) ao configurar "restart". -->
+          <util:ServiceConfig FirstFailureActionType="restart"
+                              SecondFailureActionType="restart"
+                              ThirdFailureActionType="restart"
+                              RestartServiceDelayInSeconds="5"
+                              ResetPeriodInDays="1" />
+        </ServiceInstall>
+        <ServiceControl Id="ServiceControl" Name="NobreakMonitor" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+
+      <Component Id="AppExe">
+        <File Id="AppExe" Source="$(var.PublishDir)\NobreakMonitor.App.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Atalho não anunciado: o Windows Installer exige um componente com KeyPath em HKCU. -->
+    <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
+      <Shortcut Id="StartMenuShortcut"
+                Name="Nobreak Monitor"
+                Target="[INSTALLFOLDER]NobreakMonitor.App.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKCU" Key="Software\NobreakMonitor" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!--
+      Configuração inicial com o MODO SIMULAÇÃO ligado. Nunca sobrescreve a configuração
+      existente e fica no disco ao desinstalar (assim como o histórico).
+    -->
+    <Component Id="DefaultConfig" Directory="DATAFOLDER" NeverOverwrite="yes" Permanent="yes">
+      <File Id="DefaultConfig" Source="config.default.json" Name="config.json" KeyPath="yes" />
+    </Component>
+
+    <!-- Mesmo valor que o painel grava em AutoStart.cs, então a opção nas Configurações continua valendo. -->
+    <Component Id="AutoStart" Directory="INSTALLFOLDER" Condition="AUTOSTART = 1">
+      <RegistryValue Root="HKCU"
+                     Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                     Name="NobreakMonitor"
+                     Type="string"
+                     Value="&quot;[INSTALLFOLDER]NobreakMonitor.App.exe&quot; --tray"
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- O painel trava os arquivos e, ao receber WM_CLOSE, só se esconde na bandeja: encerra o processo. -->
+    <util:CloseApplication Id="ClosePanel" Target="NobreakMonitor.App.exe" CloseMessage="yes" TerminateProcess="0" RebootPrompt="no" />
+
+    <!-- Interface: licença → instalação → "Abrir o painel" ao concluir. -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Abrir o painel do Nobreak Monitor" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#AppExe]" />
+    <CustomAction Id="LaunchPanel" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixShellExec" Impersonate="yes" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchPanel"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
+  </Package>
+</Wix>

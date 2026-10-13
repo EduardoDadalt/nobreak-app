@@ -38,7 +38,7 @@ if ($existing -and $existing.Status -ne 'Stopped') {
 }
 
 # O painel aberto também trava os arquivos.
-Get-Process -Name 'NobreakMonitor.App' -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name 'NobreakMonitor.App' -ErrorAction SilentlyContinue | Stop-Process -Force -PassThru | Wait-Process -Timeout 10
 
 # 2. Publica.
 Write-Host "Publicando em $InstallDir ..."

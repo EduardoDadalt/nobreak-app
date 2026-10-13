@@ -1,0 +1,38 @@
+<Project Sdk="WixToolset.Sdk/7.0.0">
+
+  <PropertyGroup>
+    <!-- Sobrescrito pelo CI a partir da tag (v1.2.3 → 1.2.3). -->
+    <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
+    <OutputName>NobreakMonitor-$(ProductVersion)-x64</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Cultures>pt-BR</Cultures>
+    <!-- https://wixtoolset.org/osmf/ — a taxa só vale para organizações com receita anual acima de US$ 10 mil. -->
+    <AcceptEula>wix7</AcceptEula>
+    <!--
+      WIX1149 avisa que o MsiServiceConfig nativo pode falhar. Só usamos dele o
+      FailureActionsWhen (sc failureflag), testado; as ações de falha vêm do util:ServiceConfig.
+    -->
+    <SuppressSpecificWarnings>1149</SuppressSpecificWarnings>
+    <PublishDirectory>$(MSBuildThisFileDirectory)obj\publish</PublishDirectory>
+    <DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishDirectory)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="7.0.0" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
+  </ItemGroup>
+
+  <!--
+    Publica serviço e painel self-contained (não exigem o .NET instalado) na mesma pasta,
+    para que os dois compartilhem os arquivos do runtime.
+  -->
+  <Target Name="PublishApps" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <PublishArgs>-c Release -r win-x64 --self-contained -p:Version=$(ProductVersion) -p:DebugType=none -p:SatelliteResourceLanguages=pt-BR -o "$(PublishDirectory)" --nologo</PublishArgs>
+    </PropertyGroup>
+    <RemoveDir Directories="$(PublishDirectory)" />
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\src\NobreakMonitor.Service\NobreakMonitor.Service.csproj&quot; $(PublishArgs)" />
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\src\NobreakMonitor.App\NobreakMonitor.App.csproj&quot; $(PublishArgs)" />
+  </Target>
+
+</Project>

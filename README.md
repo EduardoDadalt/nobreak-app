@@ -12,6 +12,7 @@ energia voltar antes disso, ele cancela o desligamento.
 | `src/NobreakMonitor.Service` | Serviço do Windows (LocalSystem, início automático): serial, histórico, desligamento, named pipe |
 | `src/NobreakMonitor.App` | Painel WPF com ícone na bandeja: status, testes, configurações, histórico |
 | `tests/NobreakMonitor.Core.Tests` | Testes do protocolo e da política de desligamento |
+| `installer` | Instalador MSI (WiX): serviço, painel, atalho e início automático |
 
 ```
 Nobreak ──USB/COM (2400 8N1)──► NobreakMonitor.Service ──\\.\pipe\NobreakMonitor──► NobreakMonitor.App
@@ -24,19 +25,41 @@ ninguém logado. O painel só exibe as informações e altera a configuração.
 
 ## Instalação
 
-Pré-requisito: .NET 10 SDK. Feche o **TSApp Desktop**, porque ele ocupa a porta COM do nobreak.
+Feche o **TSApp Desktop**, porque ele ocupa a porta COM do nobreak.
+
+Baixe o `NobreakMonitor-<versão>-x64.msi` da página de [Releases](https://github.com/EduardoDadalt/nobreak-app/releases)
+e execute. O .NET já vai embutido, então não é preciso instalar mais nada. O instalador:
+- instala tudo em `C:\Program Files\NobreakMonitor`;
+- registra o serviço `NobreakMonitor` com **inicialização Automática** (sobe junto com o Windows, antes do login),
+  reiniciando 5 s depois de uma falha;
+- cria o atalho "Nobreak Monitor" no Menu Iniciar e abre o painel na bandeja ao entrar no Windows
+  (desligável nas Configurações, ou instale com `msiexec /i NobreakMonitor-<versão>-x64.msi AUTOSTART=0`);
+- se ainda não houver configuração, cria uma com o **modo simulação ligado**.
+
+Para atualizar, execute o MSI da versão nova. Para remover, use "Aplicativos instalados" do Windows.
+A configuração e o histórico em `%ProgramData%\NobreakMonitor` são mantidos.
+
+### Gerando o instalador
+
+Pré-requisito: .NET 10 SDK. O [WiX Toolset](https://wixtoolset.org) vem pelo NuGet.
+
+```powershell
+dotnet build installer\NobreakMonitor.Installer.wixproj -c Release -p:ProductVersion=1.2.3
+# → installer\bin\Release\NobreakMonitor-1.2.3-x64.msi
+```
+
+O GitHub Actions roda os testes e gera o MSI a cada push (fica nos artefatos da execução). Ao enviar uma tag
+`v*` (ex.: `git tag v1.2.3 && git push origin v1.2.3`), ele cria a release com o MSI anexado.
+
+### Instalação a partir do código (desenvolvimento)
+
+Os scripts publicam com o .NET do sistema em `C:\Program Files\NobreakMonitor\{Service,App}`. Não misture
+com o MSI: remova uma instalação antes de usar a outra.
 
 ```powershell
 # PowerShell como Administrador, na raiz do repositório
 powershell -ExecutionPolicy Bypass -File .\scripts\install-service.ps1
 ```
-
-O script:
-- publica tudo em `C:\Program Files\NobreakMonitor`;
-- registra o serviço `NobreakMonitor` com **inicialização Automática** (sobe junto com o Windows, antes do login);
-- configura a recuperação para reiniciar o serviço após 5 s, 5 s e 30 s em caso de falha;
-- cria o atalho "Nobreak Monitor" no Menu Iniciar;
-- se ainda não houver configuração, cria uma com o **modo simulação ligado**.
 
 Para remover: `.\scripts\uninstall-service.ps1`. Acrescente `-RemoveData` para apagar também a configuração e o histórico.
 
